@@ -2,12 +2,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 import sys 
-sys.path.append(r"E:\ML\Dog-Cat-GANs")
 import gans1dset as dst
-
-
 CH = 3
-
 
 def normalize_imgs(x):
     return ((2*x)/255)-1.
@@ -18,7 +14,7 @@ def denormalize_imgs(x):
     
 
 #Critic    
-class Encoder2(nn.Module): # (N,3,128,128) -> (N,1)
+class Encoder2(nn.Module):
     def __init__(self):
         super(Encoder2, self).__init__()
         c1,c2,c3,c4 = 128, 256, 512, 1024
@@ -35,7 +31,7 @@ class Encoder2(nn.Module): # (N,3,128,128) -> (N,1)
     
 
 #Generator
-class AutoEnc(nn.Module): # 128 -> 29 -> 128
+class AutoEnc(nn.Module):
     def __init__(self):
         super(AutoEnc, self).__init__()
         c1,c2,c3,c4 = 1024, 512, 250, 128
@@ -84,7 +80,7 @@ def advers_train(lr = 1E-4, epochs = 5, batch=32, beta1=0.5, beta2=0.999, critic
     E2 = Encoder2().train().cuda()     
     
     optimizerG = torch.optim.Adam(AutoE.parameters(),lr,betas=(beta1, beta2))
-    optimizerC = torch.optim.Adam(E2.parameters(),lr,betas=(beta1, beta2)) #,weight_decay=lr/10
+    optimizerC = torch.optim.Adam(E2.parameters(),lr,betas=(beta1, beta2))
     
     for eps in range(epochs):    
         
@@ -129,15 +125,13 @@ def advers_train(lr = 1E-4, epochs = 5, batch=32, beta1=0.5, beta2=0.999, critic
             Glosses.append(errG.item())  
             
             
-            if b%(batch*125) == 0:# and b != 0:
+            if b%(batch*125) == 0:
                 print('[%d/%d][%d/%d]\tLoss_C: %.4f\tLoss_G: %.4f'% (eps, epochs, int(b/batch), int(len(idx_)/batch), errC.item() - penalty, errG.item()))
                 dst.visualize(denormalize_imgs(fake[0:25]).cpu().detach().numpy().astype(np.uint8))               
-                #print(x[0,:,:5,:5] == x[1,:,:5,:5])
-                print(fake[0,:,:5,:5] == fake[1,:,:5,:5])
         
         
-    torch.save(AutoE.state_dict(), r"E:\ML\Dog-Cat-GANs\DogToCat.pth")
-    torch.save(E2.state_dict(), r"E:\ML\Dog-Cat-GANs\Critic.pth")  
+    torch.save(AutoE.state_dict(), r"xyz.pth")
+    torch.save(E2.state_dict(), r"zzz.pth")  
     
     
     return AutoE, E2, Closses, Glosses
@@ -156,7 +150,7 @@ dst.plt.legend()
 dst.plt.show()
 #%%
 AE = AutoEnc().cuda()
-AE.load_state_dict(torch.load(r"E:\ML\Dog-Cat-GANs\DogToCat.pth"))
+AE.load_state_dict(torch.load(r"xyz.pth"))
 noise = torch.rand((25,100,1,1)).cuda()
 warped = AE(noise)
 wd = warped.cpu().detach().numpy()
