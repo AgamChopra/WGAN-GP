@@ -9,13 +9,12 @@ Resources:
 import torch
 import torch.nn as nn
 import numpy as np
-import gans1dset as dst #Change this with your own dataset lib. and modify data loading and visualization accordingly.
+import gans1dset as dst
 
 
-CH = 3 #Expected color channel depth.
-EPOCHS = 500
+CH = 3
+EPOCHS = 2000
 
-#Utilities
 
 def normalize_imgs(x):
     return ((2*x)/255)-1
@@ -25,16 +24,17 @@ def denormalize_imgs(x):
     return (x+1)*255/2
     
 
-#Critic Network   
+#Critic    
 class Encoder2(nn.Module): # (N,3,128,128) -> (N,1)
     def __init__(self):
         super(Encoder2, self).__init__()
-        c1,c2,c3,c4 = 256, 512, 1024, 2048
+        c1,c2,c3,c4,c5 = 64, 128, 256, 512, 1024
         self.l1 = nn.Sequential(nn.utils.spectral_norm(nn.Conv2d(CH, c1, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False),
                                 nn.utils.spectral_norm(nn.Conv2d(c1, c2, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False),
                                 nn.utils.spectral_norm(nn.Conv2d(c2, c3, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False),
-                                nn.utils.spectral_norm(nn.Conv2d(c3, c4, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False))
-        self.l2 = nn.Conv2d(c4, 1, 4, 1)
+                                nn.utils.spectral_norm(nn.Conv2d(c3, c4, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False),
+                                nn.utils.spectral_norm(nn.Conv2d(c4, c5, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False),)
+        self.l2 = nn.Conv2d(c5, 1, 4, 1)
         
     def forward(self, x):
         y = self.l1(x)
@@ -42,23 +42,23 @@ class Encoder2(nn.Module): # (N,3,128,128) -> (N,1)
         return  y
     
 
-#Generator Network
+#Generator
 class AutoEnc(nn.Module): # 128 -> 29 -> 128
     def __init__(self):
         super(AutoEnc, self).__init__()
-        c1,c2,c3,c4 = 1024, 512, 256, 128
+        c1,c2,c3,c4,c5 = 1024, 512, 256, 128, 64
         self.E = nn.Sequential(nn.ConvTranspose2d(100, c1, 4, 1), nn.Tanh(),
                                nn.ConvTranspose2d(c1, c2, 4, 2, padding = 1), nn.Tanh(),
                                nn.ConvTranspose2d(c2, c3, 4, 2, padding = 1), nn.Tanh(),
                                nn.ConvTranspose2d(c3, c4, 4, 2, padding = 1), nn.Tanh(),
-                               nn.ConvTranspose2d(c4, CH, 4, 2, padding = 1), nn.Tanh())        
+                               nn.ConvTranspose2d(c4, c5, 4, 2, padding = 1), nn.Tanh(),
+                               nn.ConvTranspose2d(c5, CH, 4, 2, padding = 1), nn.Tanh())        
     
     def forward(self, x):
         y = self.E(x)
         return  denormalize_imgs(y)
 
 
-#Gradient Penalty -> Paper: https://arxiv.org/abs/1704.00028
 def grad_penalty(critic, real, fake, device='cpu'):
     b_size, c, h, w = real.shape
     epsilon = torch.rand(b_size, 1, 1, 1).repeat(1,c,h,w).to(device)
@@ -83,17 +83,19 @@ def advers_train(lr = 1E-4, epochs = 5, batch=32, beta1=0.5, beta2=0.999, critic
     Closses = []
     Glosses = []
     
-    cat = dst.cat_dataset()
+    cat = dst.celeb_dataset()
     cat = torch.from_numpy(cat).to(dtype = torch.float)
       
     #Generator 
     AutoE = AutoEnc().cuda()
+    #AutoE.load_state_dict(torch.load(r".pth"))
     
     #Critic
-    E2 = Encoder2().train().cuda()     
+    E2 = Encoder2().train().cuda() 
+    #E2.load_state_dict(torch.load(r".pth"))    
     
     optimizerG = torch.optim.Adam(AutoE.parameters(),lr,betas=(beta1, beta2))
-    optimizerC = torch.optim.Adam(E2.parameters(),lr,betas=(beta1, beta2))
+    optimizerC = torch.optim.Adam(E2.parameters(),lr,betas=(beta1, beta2)) #,weight_decay=lr/10
     
     
     for eps in range(epochs):
@@ -145,13 +147,16 @@ def advers_train(lr = 1E-4, epochs = 5, batch=32, beta1=0.5, beta2=0.999, critic
                 Closses.append(errC.item())
                 Glosses.append(errG.item())
                 
-                if ctr%50 == 0:
+            if eps % 5 == 0 and ctr == critic_iter * 2:
                 
-                    print('[%d/%d][%d/%d]\tLoss_C: %.4f\tLoss_G: %.4f'% (eps, epochs, int(b/batch), int(len(idx_)/batch), errC.item() - penalty, errG.item()))  
-                    dst.visualize(fake[0].cpu().detach().numpy().astype(np.uint8))  
-                    dst.visualize_25(fake[:25].cpu().detach().numpy().astype(np.uint8))
+                print('[%d/%d][%d/%d]\tLoss_C: %.4f\tLoss_G: %.4f'% (eps, epochs, int(b/batch), int(len(idx_)/batch), errC.item() - penalty, errG.item()))  
+                dst.visualize(fake[0].cpu().detach().numpy().astype(np.uint8))  
+                dst.visualize_25(fake[:25].cpu().detach().numpy().astype(np.uint8))
+                torch.save(AutoE.state_dict(), r"Gen-Autosave.pth")
+                torch.save(E2.state_dict(), r"Crit-Autosave.pth") 
                 
-            ctr += 1  
+            ctr += 1
+                 
       
     return AutoE, E2, Closses, Glosses
 
