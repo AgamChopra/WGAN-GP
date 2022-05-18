@@ -7,56 +7,12 @@ Resources:
     https://arxiv.org/abs/1704.00028
 '''
 import torch
-import torch.nn as nn
-import numpy as np
+from tqdm import trange
+import wgpmodels as models
 import gans1dset as dst
 
 
-CH = 3
-EPOCHS = 2000
-
-
-def normalize_imgs(x):
-    return ((2*x)/255)-1
-
-
-def denormalize_imgs(x):
-    return (x+1)*255/2
-    
-
-#Critic    
-class Encoder2(nn.Module): # (N,3,128,128) -> (N,1)
-    def __init__(self):
-        super(Encoder2, self).__init__()
-        c1,c2,c3,c4,c5 = 64, 128, 256, 512, 1024
-        self.l1 = nn.Sequential(nn.utils.spectral_norm(nn.Conv2d(CH, c1, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False),
-                                nn.utils.spectral_norm(nn.Conv2d(c1, c2, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False),
-                                nn.utils.spectral_norm(nn.Conv2d(c2, c3, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False),
-                                nn.utils.spectral_norm(nn.Conv2d(c3, c4, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False),
-                                nn.utils.spectral_norm(nn.Conv2d(c4, c5, 4, 2, padding = 1)), nn.LeakyReLU(0.2,inplace=False),)
-        self.l2 = nn.Conv2d(c5, 1, 4, 1)
-        
-    def forward(self, x):
-        y = self.l1(x)
-        y = self.l2(y)
-        return  y
-    
-
-#Generator
-class AutoEnc(nn.Module): # 128 -> 29 -> 128
-    def __init__(self):
-        super(AutoEnc, self).__init__()
-        c1,c2,c3,c4,c5 = 1024, 512, 256, 128, 64
-        self.E = nn.Sequential(nn.ConvTranspose2d(100, c1, 4, 1), nn.Tanh(),
-                               nn.ConvTranspose2d(c1, c2, 4, 2, padding = 1), nn.Tanh(),
-                               nn.ConvTranspose2d(c2, c3, 4, 2, padding = 1), nn.Tanh(),
-                               nn.ConvTranspose2d(c3, c4, 4, 2, padding = 1), nn.Tanh(),
-                               nn.ConvTranspose2d(c4, c5, 4, 2, padding = 1), nn.Tanh(),
-                               nn.ConvTranspose2d(c5, CH, 4, 2, padding = 1), nn.Tanh())        
-    
-    def forward(self, x):
-        y = self.E(x)
-        return  denormalize_imgs(y)
+print('cuda detected:',torch.cuda.is_available())
 
 
 def grad_penalty(critic, real, fake, device='cpu'):
@@ -64,7 +20,7 @@ def grad_penalty(critic, real, fake, device='cpu'):
     epsilon = torch.rand(b_size, 1, 1, 1).repeat(1,c,h,w).to(device)
     interp_img = real * epsilon + fake * (1 - epsilon)
     
-    mix_score = critic(normalize_imgs(interp_img))
+    mix_score = critic(interp_img)
     
     grad = torch.autograd.grad(outputs = mix_score, 
                                    inputs = interp_img, 
@@ -78,106 +34,157 @@ def grad_penalty(critic, real, fake, device='cpu'):
     return penalty
 
 
-def advers_train(lr = 1E-4, epochs = 5, batch=32, beta1=0.5, beta2=0.999, critic_iter=5, Lambda_penalty = 10):
+def advers_train(dataset, lr = 1E-4, epochs = 5, batch=32, beta1=0.5, beta2=0.999, critic_iter=5, Lambda_penalty = 10, dmt = 16, load_state = False,gmod='A',cmod='A',state=None):
+    
+    if batch >= dmt:
+        REG = int(batch / dmt)
+        batch -=  REG    
+    else:
+        REG = 1
     
     Closses = []
     Glosses = []
     
-    cat = dst.celeb_dataset()
-    cat = torch.from_numpy(cat).to(dtype = torch.float)
-      
+    CH = dataset.shape[1]
+    
+    print('loading generator...', end =" ")
     #Generator 
-    AutoE = AutoEnc().cuda()
-    #AutoE.load_state_dict(torch.load(r".pth"))
+    Gen = models.Generator(gmod,CH).cuda()
+    print('done.')
     
+    print('loading critic...', end =" ")
     #Critic
-    E2 = Encoder2().train().cuda() 
-    #E2.load_state_dict(torch.load(r".pth"))    
+    Crit = models.Critic(cmod,CH).cuda()   
+    print('done.')
     
-    optimizerG = torch.optim.Adam(AutoE.parameters(),lr,betas=(beta1, beta2))
-    optimizerC = torch.optim.Adam(E2.parameters(),lr,betas=(beta1, beta2)) #,weight_decay=lr/10
-    
-    
-    for eps in range(epochs):
+    if load_state:
+        print('loading previous run state...', end =" ")
+        Gen.load_state_dict(torch.load(r"E:\ML\Dog-Cat-GANs\Gen-Autosave.pt"))
+        Crit.load_state_dict(torch.load(r"E:\ML\Dog-Cat-GANs\Crit-Autosave.pt"))  
+        print('done.')
         
-        idx_ = torch.randperm(cat.shape[0])
+    if state is not None:
+        Gen.load_state_dict(torch.load(state[0]))
+        Crit.load_state_dict(torch.load(state[1]))  
+    
+    optimizerG = torch.optim.Adam(Gen.parameters(),lr,betas=(beta1, beta2))
+    optimizerC = torch.optim.Adam(Crit.parameters(),lr,betas=(beta1, beta2))
+    
+    checkpoint = 0
+    checkpoint_log = [['Checkpoint','Epoche','Ctr_batch','Critic_Error','Generator_Error','Critic_Penalty']]
+    
+    print('optimizing...')
+    for eps in trange(epochs):
+        
+        idx_ = torch.randperm(dataset.shape[0])
         ctr = 1
         
-        for b in range(0,cat.shape[0]-batch,batch):            
+        for b in range(0,dataset.shape[0]-batch,batch):            
             
             ###Critic###            
             optimizerC.zero_grad() 
-            real = cat[idx_[b:b+batch]].cuda() #not normalized
+            real = dataset[idx_[b:b+batch]].cuda() / 255.
             
-            x = (torch.rand((1,100,1,1)).cuda() * 2) - 1
-            fake = AutoE(x)
-            real = torch.cat((real,fake),dim=0) # Adding noise to real data to improve generator stability
+            x = torch.rand((REG,1,10,10)).cuda()
+            fake = Gen(x)
+            real = torch.cat((real,fake),dim=0) # Adding noise to real data to improve generator stability and weaken critic
             
-            x = (torch.rand((real.shape[0],100,1,1)).cuda() * 2) - 1
-            fake = AutoE(x) #not normalized
+            x = torch.rand((real.shape[0],1,10,10)).cuda()
+            fake = Gen(x) 
                             
             #Real
-            y = E2(normalize_imgs(real))
+            y = Crit(real)
             errC_real = y.mean()
                 
             #fake
-            y = E2(normalize_imgs(fake.detach()))
+            y = Crit(fake.detach())
             errC_fake = y.mean()
                 
             #total err/loss
-            penalty = grad_penalty(E2, real, fake, device='cuda') 
-            errC = (errC_fake - errC_real) + (Lambda_penalty * penalty)                   
+            penalty = Lambda_penalty * grad_penalty(Crit, real, fake, device='cuda') 
+            errC = errC_fake - errC_real + penalty                   
             errC.backward(retain_graph = True)
-            optimizerC.step()
-            
+            optimizerC.step()         
             
             if ctr % critic_iter == 0:
                 ###Generator###
-                x = (torch.rand((real.shape[0],100,1,1)).cuda() * 2) - 1
-                fake = AutoE(normalize_imgs(x))
+                x = torch.rand((real.shape[0],1,10,10)).cuda()
+                fake = Gen(x)
                 
                 optimizerG.zero_grad()            
-                y = E2(normalize_imgs(fake))
+                y = Crit(fake)
                 errG = -y.mean()
                 errG.backward()            
                 optimizerG.step()
-
                 
                 #Misc.
                 Closses.append(errC.item())
                 Glosses.append(errG.item())
                 
-            if eps % 5 == 0 and ctr == critic_iter * 2:
-                
-                print('[%d/%d][%d/%d]\tLoss_C: %.4f\tLoss_G: %.4f'% (eps, epochs, int(b/batch), int(len(idx_)/batch), errC.item() - penalty, errG.item()))  
-                dst.visualize(fake[0].cpu().detach().numpy().astype(np.uint8))  
-                dst.visualize_25(fake[:25].cpu().detach().numpy().astype(np.uint8))
-                torch.save(AutoE.state_dict(), r"Gen-Autosave.pth")
-                torch.save(E2.state_dict(), r"Crit-Autosave.pth") 
-                
+                if ctr % (critic_iter * 100) == 0:
+                    print('[%d/%d][%d/%d]\tLoss_C: %.4f\tLoss_G: %.4f'% (eps, epochs, int(b/batch), int(len(idx_)/batch), errC.item(), errG.item()))  
+                    dst.visualize_25(fake[:25].cpu().detach().numpy(),dark = False) #dst.visualize(fake[0].cpu().detach().numpy())
+                    torch.save(Gen.state_dict(), r"E:\ML\Dog-Cat-GANs\Gen-Autosave.pt")
+                    torch.save(Crit.state_dict(), r"E:\ML\Dog-Cat-GANs\Crit-Autosave.pt")
+               
+                if ctr % (critic_iter * 600) == 0:
+                    print('Saving checkpoint #%d @ epoch %d, ctr_batch %d, LossC,LossG = [%d, %d], C_penalty = %d'%(checkpoint,eps,ctr,errC.item(),errG.item(),penalty))
+                    checkpoint_log.append([checkpoint,eps,ctr,errC.item(),errG.item(),penalty])
+                    torch.save(Gen.state_dict(), r"E:\ML\Dog-Cat-GANs\Gen_checkpoint_%d.pt"%(checkpoint))
+                    torch.save(Crit.state_dict(), r"E:\ML\Dog-Cat-GANs\Crit_checkpoint_%d.pt"%(checkpoint))
+                    checkpoint += 1
+                    
             ctr += 1
                  
       
-    return AutoE, E2, Closses, Glosses
+    return Gen, Crit, Closses, Glosses, checkpoint_log
 
 
-AE,E2,Dl,Gl = advers_train(lr=1E-4,epochs=EPOCHS,batch=64,critic_iter=5)
+def train(gmod = 'A',cmod = 'B', Gsave = r"E:\ML\Dog-Cat-GANs\Gen_temp.pt", Csave = r"E:\ML\Dog-Cat-GANs\Crit_temp.pt"):
+    
+    print('loading data...')
+    dataset = dst.torch_celeb_dataset()
+    print('done.')
 
-dst.plt.figure(figsize=(10,5))
-dst.plt.title("Generator and Discriminator Loss During Training")
-dst.plt.plot(Dl, label='D_loss')
-dst.plt.plot(Gl, label='G_loss')
-dst.plt.legend()
-dst.plt.xlabel("iterations")
-dst.plt.ylabel("Loss")
-dst.plt.legend()
-dst.plt.show()
+    EPOCHS = 80
+    print("E:\ML\Dog-Cat-GANs\Gen-Autosave.pt")
+    print("E:\ML\Dog-Cat-GANs\Crit-Autosave.pt")
+    Gen,Crit,Dl,Gl = advers_train(dataset=dataset,lr=1E-4,epochs=EPOCHS,batch=64,critic_iter=5,load_state = False,gmod=gmod,cmod=cmod)#,state=[Gsave,Csave])
+    
+    dst.plt.figure(figsize=(10,5))
+    dst.plt.title("Generator and Critic Loss During Training")
+    dst.plt.plot(Dl, label='D_loss')
+    dst.plt.plot(Gl, label='G_loss')
+    dst.plt.legend()
+    dst.plt.xlabel("iterations")
+    dst.plt.ylabel("Loss")
+    dst.plt.legend()
+    dst.plt.show()
+    
+    torch.save(Gen.state_dict(), Gsave)
+    torch.save(Crit.state_dict(), Csave)
 
-torch.save(AE.state_dict(), r"temp-gen.pth")
-torch.save(E2.state_dict(), r"temp-crit.pth")
+def gen_img(gmod = 'A'):
+    Gsave = r"E:\ML\Dog-Cat-GANs\Gen-Autosave.pt"
+    Gen = models.Generator(gmod,3).cuda()
+    try:
+        Gen.load_state_dict(torch.load(Gsave))
+    except:
+        print('Warning: Could not load generator parameters at',Gsave)
+    noise = torch.rand((25,1,10,10)).cuda()
+    warped = Gen(noise)
+    wd = warped.cpu().detach().numpy()
+    print(warped.shape)
+    dst.visualize_25(wd,dark=False)
+    
+def main():
+    x = int(input('Would you like to train model(press \'1\') or generate synthetic images from previous state(press \'2\')?'))
+    if x == 1:
+        train()
+    elif x==2:
+        gen_img()
+    else:
+        print('Value Error: Please enter either 1 or 2')
 
-noise = torch.rand((1,100,1,1)).cuda()
-warped = AE(noise)
-wd = warped.cpu().detach().numpy().astype(np.uint8)
-print(wd[0,:,32])
-dst.visualize(wd[0])
+if __name__ == "__main__":
+    main()
