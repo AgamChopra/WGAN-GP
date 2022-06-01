@@ -1,5 +1,6 @@
 import torch.nn as nn
-import sys
+import sys 
+sys.path.append(r"E:\ML\Dog-Cat-GANs")
 import myViT as vit
 
 
@@ -24,7 +25,7 @@ class CriticA(nn.Module): # (N,3,128,128) -> (N,1)
 class CriticB(nn.Module): # (N,3,128,128) -> (N,1)
     def __init__(self,CH):
         super(CriticB, self).__init__()
-        self.c = 32
+        self.c = 40
         
         self.E = nn.Sequential(nn.utils.spectral_norm(nn.Conv2d(CH, self.c, kernel_size=3, stride=1)), nn.LeakyReLU(0.2,inplace=False),
                                nn.utils.spectral_norm(nn.Conv2d(self.c, self.c, kernel_size=3, stride=2)), nn.LeakyReLU(0.2,inplace=False),
@@ -69,8 +70,8 @@ def Critic(mode='A',CH=3):
     return model    
 
 
-#Generator.
-class GeneratorB(nn.Module):
+#Generator. Returns floating point RGB (3 channel with continous range of [0.,255.]) images.
+class GeneratorB(nn.Module): # 128 -> 29 -> 128
     def __init__(self,CH):
         super(GeneratorB, self).__init__()
         c1,c2,c3,c4,c5 = 1024, 512, 256, 128, 64
@@ -90,7 +91,7 @@ class GeneratorB(nn.Module):
 class GeneratorA(nn.Module): # (N,100,1,1) -> (N,3,128,128)
     def __init__(self,CH):
         super(GeneratorA, self).__init__()
-        self.a,self.c_,self.c = 16,16,32
+        self.a,self.c_,self.c = 16,24,40
         
         self.fc = nn.Sequential(nn.Linear(100, self.c_ * self.a * self.a), nn.ReLU(inplace=False), nn.BatchNorm1d(self.c_ * self.a * self.a))
         
@@ -134,3 +135,21 @@ def Generator(mode='A',CH=3):
     else:
         model = None
     return model
+
+
+# =============================================================================
+# import torch  
+# torch.manual_seed(0)
+# x = torch.ones(64,3,128,128).cuda()
+# m = CriticB(3).cuda()
+# y = m(x)
+# print(y.shape,y.mean()) 
+# =============================================================================
+# =============================================================================
+# import torch  
+# torch.manual_seed(0)
+# x = torch.rand((64,1,10,10)).cuda()
+# m = Generator('A').cuda()
+# y = m(x)
+# print(y.shape)
+# =============================================================================
