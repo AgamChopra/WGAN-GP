@@ -1,5 +1,5 @@
 <h1>WGAN-GP</h1>
-<p>My code for various GANS related tasks using wgan with gradient penalty. playground.py contains the code for training the generator and critic using wgan-gp.</p>
+<p>My code for various GANS related tasks using wgan with gradient penalty. train.py contains the code for training the generator and critic using wgan-gp.</p>
 
 <p align="center">
     <img width="300" height="300" src="https://github.com/AgamChopra/WGAN-GP/blob/main/img/Gen_temp.jpg">
