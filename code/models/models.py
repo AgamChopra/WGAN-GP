@@ -1,7 +1,5 @@
 import torch.nn as nn
-import sys 
-sys.path.append(r"E:\ML\Dog-Cat-GANs")
-import myViT as vit
+import ViT as vit
 
 
 #Critic    

@@ -1,16 +1,14 @@
 import torch
 from tqdm import trange
-import sys 
-sys.path.append(r"E:\ML\Dog-Cat-GANs")
-import wgpmodels as models
-import gans1dset as dst
+import models
+import dataset as dst
 
 
 print('cuda detected:',torch.cuda.is_available())
 
 
 def save_checkpoint_log(list_):
-    fout = open('E:\ML\Dog-Cat-GANs\checkpoint_log.txt', 'w')
+    fout = open('checkpoint_log.txt', 'w')
     for i in range(len(list_)):
         for item in list_[i]:
             fout.write(str(item))
@@ -60,8 +58,8 @@ def advers_train(dataset, lr = 1E-4, epochs = 5, batch=32, beta1=0.5, beta2=0.99
     
     if load_state:
         print('loading previous run state...', end =" ")
-        Gen.load_state_dict(torch.load(r"E:\ML\Dog-Cat-GANs\Gen-Autosave.pt"))
-        Crit.load_state_dict(torch.load(r"E:\ML\Dog-Cat-GANs\Crit-Autosave.pt"))  
+        Gen.load_state_dict(torch.load("Gen-Autosave.pt"))
+        Crit.load_state_dict(torch.load("Crit-Autosave.pt"))  
         print('done.')
         
     if state is not None:
@@ -122,8 +120,8 @@ def advers_train(dataset, lr = 1E-4, epochs = 5, batch=32, beta1=0.5, beta2=0.99
                 if ctr % (critic_iter * 100) == 0:
                     print('[%d/%d][%d/%d]\tLoss_C: %.4f\tLoss_G: %.4f'% (eps, epochs, int(b/batch), int(len(idx_)/batch), errC.item(), errG.item()))  
                     dst.visualize_16(fake[:16].cpu().detach().numpy(),dark = True) #dst.visualize(fake[0].cpu().detach().numpy())
-                    torch.save(Gen.state_dict(), r"E:\ML\Dog-Cat-GANs\Gen-Autosave.pt")
-                    torch.save(Crit.state_dict(), r"E:\ML\Dog-Cat-GANs\Crit-Autosave.pt")
+                    torch.save(Gen.state_dict(), "Gen-Autosave.pt")
+                    torch.save(Crit.state_dict(), "Crit-Autosave.pt")
                     
             ctr += 1
                  
@@ -131,7 +129,7 @@ def advers_train(dataset, lr = 1E-4, epochs = 5, batch=32, beta1=0.5, beta2=0.99
     return Gen, Crit, Closses, Glosses#, checkpoint_log
 
 
-def train(gmod = 'A',cmod = 'B', Gsave = r"E:\ML\Dog-Cat-GANs\Gen_temp.pt", Csave = r"E:\ML\Dog-Cat-GANs\Crit_temp.pt"):
+def train(gmod = 'A',cmod = 'B', Gsave = "\Gen_temp.pt", Csave = "Crit_temp.pt"):
     
     print('loading data...')
     dataset = dst.torch_celeb_dataset()
@@ -139,8 +137,8 @@ def train(gmod = 'A',cmod = 'B', Gsave = r"E:\ML\Dog-Cat-GANs\Gen_temp.pt", Csav
 
     EPOCHS = 50
     BATCH = 64
-    print("E:\ML\Dog-Cat-GANs\Gen-Autosave.pt")
-    print("E:\ML\Dog-Cat-GANs\Crit-Autosave.pt")
+    print("Gen-Autosave.pt")
+    print("Crit-Autosave.pt")
     Gen,Crit,Dl,Gl = advers_train(dataset=dataset,lr=1E-4,epochs=EPOCHS,batch=BATCH,dmt=BATCH/2,critic_iter=5,load_state = False,gmod=gmod,cmod=cmod)#,state=[Gsave,Csave])
    
     dst.plt.figure(figsize=(10,5))
@@ -161,7 +159,7 @@ def train(gmod = 'A',cmod = 'B', Gsave = r"E:\ML\Dog-Cat-GANs\Gen_temp.pt", Csav
 
 def gen_img(Gen = None, gmod = 'A'):
     if Gen is None:
-        Gsave = r"E:\ML\Dog-Cat-GANs\Gen_temp.pt"
+        Gsave = "Gen_temp.pt"
         Gen = models.Generator(gmod,3).cuda()
         try:
             Gen.load_state_dict(torch.load(Gsave))
