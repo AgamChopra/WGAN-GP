@@ -1,0 +1,47 @@
+Bootstrap: library
+From: ubuntu:18.04
+Stage: build
+
+%post
+  # Install general dependencies
+  apt-get update && apt-get install -y --no-install-recommends build-essential cmake git unzip zip gcc  curl wget tar \
+      zlib1g-dev bash-completion libcurl4-openssl-dev libreadline-gplv2-dev libncursesw5-dev \
+      libssl-dev libsqlite3-dev libgdbm-dev libc6-dev libbz2-dev liblzma-dev libffi-dev nano ca-certificates
+  apt-get clean
+
+  # Install python3.8
+  cd /usr/src
+  wget https://www.python.org/ftp/python/3.8.9/Python-3.8.9.tar.xz
+  tar xJf Python-3.8.9.tar.xz
+  cd Python-3.8.9
+  ./configure --enable-shared LDFLAGS="-Wl,-rpath /usr/local/lib"
+  make
+  make install
+
+  # Install python packages
+  pip3 install --no-cache-dir --upgrade pip
+  pip3 install --no-cache-dir --upgrade numpy nibabel
+  pip3 install --no-cache-dir --upgrade torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
+  pip3 install --no-cache-dir --upgrade pillow
+
+  # Set up environment
+  NOW=`date`
+  echo "export NOW=\"${NOW}\"" >> $SINGULARITY_ENVIRONMENT
+
+# Copy your files into Singularity container (model+script)
+
+%files
+  # place your python script inside the container
+  run_model.py /home/gans_test/run_model.py
+  models.py /home/gans_test/models.py
+
+  # place your model file inside the container
+  Gen_temp.pt /home/gans_test/Gen_temp.pt
+  
+# ***Please dont change the following lines
+%runscript
+    # runtime bash commands
+    ls -alh /home/gans_test
+    echo "Arguments received: $*"
+    echo 'Executing: python3 /home/gans_test/run_model.py '"$@"
+    exec python3 /home/gans_test/run_model.py "$@"

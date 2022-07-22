@@ -1,0 +1,44 @@
+vagrant@vagrant:/home/gans_test$ sudo singularity run mycont.sif
+total 503M
+drwxrwxrwx  6  900  900 4.0K Jul 22 03:00 .
+drwxr-xr-x. 3 root root   32 Jul 22 02:54 ..
+-rwxrwxrwx  1  900  900 3.0M Jun  1 12:20 Gen_temp.pt
+drwxrwxrwx  2  900  900 4.0K Jul 21 19:48 __pycache__
+drwxr-xr-x  2 root root 4.0K Jul 21 22:41 cont_opt
+-rwxrwxrwx  1  900  900 1.1K Jul 21 18:19 hello.txt
+-rwxrwxrwx  1  900  900 1.8K Jul 20 22:49 models.py
+-rwxr-xr-x  1  900  900 465M Jul 22 03:00 mycont.sif
+-rw-rw-r--  1  900  900 1.6K Jul 22 01:47 mydef.def
+drwxr-xr-x  2 root root 4.0K Jul 22 03:01 otp
+drwxrwxrwx  2  900  900 4.0K Jul 22 03:19 output
+-rwxrwxrwx  1  900  900 1.3K Jul 22 02:54 run_model.py
+-rwxrwxrwx  1  900  900  36M Jul 21 17:30 ubuntu.sif
+Arguments received:
+Executing: python3 /home/gans_test/run_model.py
+Output Path: /home/gans_test/otp
+device: cpu
+Generating model ind initial conditions...
+Model loaded
+Model parameters loaded
+Initial conditions generated
+Images generated
+Writing image 0 to disk...
+done
+Writing image 1 to disk...
+done
+Writing image 2 to disk...
+done
+Writing image 3 to disk...
+done
+Writing image 4 to disk...
+done
+Writing image 5 to disk...
+done
+Writing image 6 to disk...
+done
+Writing image 7 to disk...
+done
+Writing image 8 to disk...
+done
+Writing image 9 to disk...
+done
