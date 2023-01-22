@@ -1,5 +1,5 @@
 <h1>WGAN-GP</h1>
-<p>My code for various GANS related tasks using wgan with gradient penalty. train.py contains the code for training the generator and critic using wgan-gp.</p>
+<p>My code for various GANS related tasks using wgan with gradient penalty. This adversarial model (generator and critic models) were trained on a single NIDIA RTX 3070 8gb GPU. The trained generator requires about 2gb of memory in production(evaluation + no_grad) mode. train.py contains the code for training the generator and critic using wgan-gp. A docker container will be provided in the future if I can get my hands on better hardware and retrain the models with more parameters.</p>
 
 <p align="center">
     <img width="300" height="300" src="https://github.com/AgamChopra/WGAN-GP/blob/main/img/Gen_temp.jpg">
