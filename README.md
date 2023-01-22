@@ -12,7 +12,7 @@
     <img width="300" height="300"src="https://github.com/AgamChopra/WGAN-GP/blob/main/img/Figure%202022-06-02%20182811%20(15).png">
     <br><i>Fig. Output of generator at every 50th epoch for 500 epochs(Left). Outputs of trained generator using cat dataset.(Right).</i><br>
     <img width="300" height="300"src="https://github.com/AgamChopra/WGAN-GP/blob/main/img/pruned_1by4_output_sample.png">
-    <br><i>Fig. Output of pruned trained generator.</i><br>
+    <br><i>Fig. Output of pruned generator.</i><br>
 </p>
 
 <p><a href="https://raw.githubusercontent.com/AgamChopra/WGAN-GP/main/LICENSE" target="blank">[The MIT License]</a></p>
