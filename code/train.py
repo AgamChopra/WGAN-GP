@@ -11,28 +11,19 @@ torch.set_printoptions(precision=9)
 # 'highest', 'high', 'medium'. 'highest' is slower but accurate while 'medium'
 #  is faster but less accurate. 'high' is preferred setting. Refer:
 #  https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html
-torch.set_float32_matmul_precision('highest')
+torch.set_float32_matmul_precision('medium')
 
 # 'True' = faster but less accurate, 'False' = Slower but more accurate
 #  has to be set to True if precision is high or medium
-torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cuda.matmul.allow_tf32 = True
 
 # 'True' = faster but less accurate, 'False' = Slower but more accurate
 #  has to be set to True if precision is high or medium
-torch.backends.cudnn.allow_tf32 = False
+torch.backends.cudnn.allow_tf32 = True
 
 # For stability 'False', 'True', might be slower
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.deterministic = True
-
-
-def save_checkpoint_log(list_):
-    fout = open('checkpoint_log.txt', 'w')
-    for i in range(len(list_)):
-        for item in list_[i]:
-            fout.write(str(item))
-        fout.write('\n')
-    fout.close()
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.deterministic = False
 
 
 def grad_penalty(critic, real, fake, weight):
@@ -50,7 +41,7 @@ def grad_penalty(critic, real, fake, weight):
 
     grad = grad.view(b_size, -1)
     # Calculating manual gradient norm to avoid issues around 0 by adding epsilon = 1E-12. {grad.norm(2,dim=1)}
-    grad_norm = torch.sqrt((torch.sum(grad ** 2, dim=1)) + 1E-12)
+    grad_norm = torch.sqrt((torch.sum(grad ** 2, dim=1)) + 1E-6)
     penalty = torch.mean((grad_norm - 1) ** 2)
     return weight * penalty
 
@@ -79,8 +70,10 @@ def advers_train(dataloader, lr=1E-4, epochs=5, batch=32, beta1=0.5, beta2=0.999
 
     if load_state:
         print('loading previous run state...', end=" ")
-        Gen.load_state_dict(torch.load("/home/agam/Documents/git_projects/Gen-Autosave.pt"))
-        Crit.load_state_dict(torch.load("/home/agam/Documents/git_projects/Crit-Autosave.pt"))
+        Gen.load_state_dict(torch.load(
+            "/home/agam/Documents/git_projects/Gen-Autosave.pt"))
+        Crit.load_state_dict(torch.load(
+            "/home/agam/Documents/git_projects/Crit-Autosave.pt"))
         print('done.')
 
     if state is not None:
@@ -123,6 +116,7 @@ def advers_train(dataloader, lr=1E-4, epochs=5, batch=32, beta1=0.5, beta2=0.999
             penalty = grad_penalty(Crit, real, fake, Lambda_penalty)
             errC = errC_fake - errC_real + penalty
             errC.backward(retain_graph=True)
+            torch.nn.utils.clip_grad_norm_(Crit.parameters(), max_norm=1.0)
             optimizerC.step()
 
             if ctr % critic_iter == 0:
@@ -134,6 +128,7 @@ def advers_train(dataloader, lr=1E-4, epochs=5, batch=32, beta1=0.5, beta2=0.999
                 y = Crit(fake)
                 errG = -y.mean()
                 errG.backward()
+                torch.nn.utils.clip_grad_norm_(Gen.parameters(), max_norm=1.0)
                 optimizerG.step()
 
                 # Misc.
@@ -147,8 +142,10 @@ def advers_train(dataloader, lr=1E-4, epochs=5, batch=32, beta1=0.5, beta2=0.999
                         fake[:16].cpu().detach().numpy(), dark=True)
 
             if eps % 10 == 0:
-                torch.save(Gen.state_dict(), "/home/agam/Documents/git_projects/Gen-Autosave.pt")
-                torch.save(Crit.state_dict(), "/home/agam/Documents/git_projects/Crit-Autosave.pt")
+                torch.save(Gen.state_dict(),
+                           "/home/agam/Documents/git_projects/Gen-Autosave.pt")
+                torch.save(Crit.state_dict(),
+                           "/home/agam/Documents/git_projects/Crit-Autosave.pt")
 
             ctr += 1
 
@@ -156,18 +153,19 @@ def advers_train(dataloader, lr=1E-4, epochs=5, batch=32, beta1=0.5, beta2=0.999
 
 
 def train():
+    EPOCHS = 1000
+    BATCH = 128
+
     print('loading data...')
     transform = transforms.Compose([
         transforms.Resize((64, 64)),
         transforms.ToTensor(),
     ])
     celeb_dataset = datasets.CelebA(
-        root='./data', split='train', download=True, transform=transform)
-    dataloader = DataLoader(celeb_dataset, batch_size=64, shuffle=True)
+        root='./data', split='train', download=False, transform=transform)
+    dataloader = DataLoader(celeb_dataset, batch_size=BATCH, shuffle=True)
     print('done.')
 
-    EPOCHS = 1000
-    BATCH = 128
     print("/home/agam/Documents/git_projects/Gen-Autosave.pt")
     print("/home/agam/Documents/git_projects/Crit-Autosave.pt")
     Gen, Crit, Dl, Gl = advers_train(
@@ -185,8 +183,10 @@ def train():
     dst.plt.legend()
     dst.plt.show()
 
-    torch.save(Gen.state_dict(), "/home/agam/Documents/git_projects/Gen-Autosave.pt")
-    torch.save(Crit.state_dict(), "/home/agam/Documents/git_projects/Crit-Autosave.pt")
+    torch.save(Gen.state_dict(),
+               "/home/agam/Documents/git_projects/Gen-Autosave.pt")
+    torch.save(Crit.state_dict(),
+               "/home/agam/Documents/git_projects/Crit-Autosave.pt")
 
     return Gen
 
