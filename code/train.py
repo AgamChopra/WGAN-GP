@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
-from tqdm import trange
+from tqdm import trange, tqdm
 import models
 import dataset as dst
 
@@ -26,9 +26,15 @@ torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = False
 
 
+class NormalizeTransform:
+    def __call__(self, x):
+        return (x - x.min()) / (x.max() - x.min())
+
+
 def grad_penalty(critic, real, fake, weight):
     b_size, c, h, w = real.shape
-    epsilon = torch.rand(b_size, 1, 1, 1).repeat(1, c, h, w).cuda()
+    epsilon = torch.rand(b_size, 1, 1, 1, requires_grad=True).repeat(
+        1, c, h, w).cuda()
     interp_img = (real * epsilon) + (fake * (1 - epsilon))
 
     mix_score = critic(interp_img)
@@ -80,19 +86,26 @@ def advers_train(dataloader, lr=1E-4, epochs=5, batch=32, beta1=0.5, beta2=0.999
         Gen.load_state_dict(torch.load(state[0]))
         Crit.load_state_dict(torch.load(state[1]))
 
-    optimizerG = torch.optim.Adam(Gen.parameters(), lr, betas=(beta1, beta2))
-    optimizerC = torch.optim.Adam(Crit.parameters(), lr, betas=(beta1, beta2))
+    optimizerG = torch.optim.AdamW(Gen.parameters(), lr,
+                                   betas=(beta1, beta2), weight_decay=1E-4)
+    optimizerC = torch.optim.AdamW(Crit.parameters(), lr,
+                                   betas=(beta1, beta2), weight_decay=1E-4)
 
     print('optimizing...')
     print(dataloader.batch_size, len(dataloader.dataset))
 
-    for eps in trange(epochs):
+    for eps in range(epochs):
         ctr = 1
 
-        for i, (real, _) in enumerate(dataloader):
+        GlossesEP = []
+        ClossesEP = []
+
+        for i, (real, _) in enumerate(
+                tqdm(dataloader,
+                     desc=f"Iterating epoch {eps + 1}|{epochs}")):
             if i * dataloader.batch_size >= len(dataloader.dataset):
                 break
-
+            # Critic
             real = real.cuda()
             optimizerC.zero_grad()
 
@@ -116,11 +129,13 @@ def advers_train(dataloader, lr=1E-4, epochs=5, batch=32, beta1=0.5, beta2=0.999
             penalty = grad_penalty(Crit, real, fake, Lambda_penalty)
             errC = errC_fake - errC_real + penalty
             errC.backward(retain_graph=True)
-            torch.nn.utils.clip_grad_norm_(Crit.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(Crit.parameters(), max_norm=0.5)
             optimizerC.step()
 
+            ClossesEP.append(errC.item())
+
+            # Generator
             if ctr % critic_iter == 0:
-                ### Generator###
                 x = torch.rand((real.shape[0], 100, 1, 1)).cuda()
                 fake = Gen(x)
 
@@ -128,26 +143,37 @@ def advers_train(dataloader, lr=1E-4, epochs=5, batch=32, beta1=0.5, beta2=0.999
                 y = Crit(fake)
                 errG = -y.mean()
                 errG.backward()
-                torch.nn.utils.clip_grad_norm_(Gen.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(Crit.parameters(), max_norm=0.5)
+                torch.nn.utils.clip_grad_norm_(Gen.parameters(), max_norm=0.5)
                 optimizerG.step()
 
                 # Misc.
-                Closses.append(errC.item())
-                Glosses.append(errG.item())
+                GlossesEP.append(errG.item())
 
                 if ctr % (critic_iter * 100) == 0:
-                    print('[%d/%d][%d/%d]\tLoss_C: %.4f\tLoss_G: %.4f' % (eps, epochs,
-                          ctr, len(dataloader), errC.item(), errG.item()))
                     dst.visualize_16(
                         fake[:16].cpu().detach().numpy(), dark=True)
 
-            if eps % 10 == 0:
-                torch.save(Gen.state_dict(),
-                           "/home/agam/Documents/git_projects/Gen-Autosave.pt")
-                torch.save(Crit.state_dict(),
-                           "/home/agam/Documents/git_projects/Crit-Autosave.pt")
-
             ctr += 1
+
+        Closses.append(sum(ClossesEP)/len(ClossesEP))
+        Glosses.append(sum(GlossesEP)/len(GlossesEP))
+
+        dst.plt.figure(figsize=(10, 5))
+        dst.plt.title("Generator and Critic Loss During Training")
+        dst.plt.plot(Closses, label='D_loss')
+        dst.plt.plot(Glosses, label='G_loss')
+        dst.plt.legend()
+        dst.plt.xlabel("iterations")
+        dst.plt.ylabel("Loss")
+        dst.plt.legend()
+        dst.plt.show()
+
+        if eps % 10 == 0:
+            torch.save(Gen.state_dict(),
+                       "/home/agam/Documents/git_projects/Gen-Autosave.pt")
+            torch.save(Crit.state_dict(),
+                       "/home/agam/Documents/git_projects/Crit-Autosave.pt")
 
     return Gen, Crit, Closses, Glosses
 
@@ -160,9 +186,10 @@ def train():
     transform = transforms.Compose([
         transforms.Resize((64, 64)),
         transforms.ToTensor(),
+        NormalizeTransform(),
     ])
     celeb_dataset = datasets.CelebA(
-        root='./data', split='train', download=False, transform=transform)
+        root='./data', split='train', download=True, transform=transform)
     dataloader = DataLoader(celeb_dataset, batch_size=BATCH, shuffle=True)
     print('done.')
 

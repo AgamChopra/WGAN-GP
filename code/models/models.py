@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class Critic(nn.Module):  # (N,3,64,64) -> (N,1)
-    def __init__(self, input_channels, num_feature_maps=256):
+    def __init__(self, input_channels, num_feature_maps=128):
         super(Critic, self).__init__()
         self.c = num_feature_maps
 
@@ -12,27 +12,27 @@ class Critic(nn.Module):  # (N,3,64,64) -> (N,1)
             MultiKernelConv2d(input_channels, self.c, stride=2,
                               padding=1, apply_spectral_norm=True,
                               groups=1),
-            nn.Mish(),
+            nn.PReLU(),
             MultiKernelConv2d(self.c, self.c, stride=2,
                               padding=1, apply_spectral_norm=True,
-                              groups=2),
-            nn.Mish(),
-            MultiKernelConv2d(self.c, self.c * 2, stride=2,
-                              padding=1, apply_spectral_norm=True,
-                              groups=4),
-            nn.Mish(),
-            MultiKernelConv2d(self.c * 2, self.c * 4, stride=2,
-                              padding=1, apply_spectral_norm=True,
-                              groups=4),
-            nn.Mish(),
-            MultiKernelConv2d(self.c * 4, self.c * 8, stride=2,
+                              groups=16),
+            nn.PReLU(),
+            MultiKernelConv2d(self.c, self.c, stride=2,
                               padding=1, apply_spectral_norm=True,
                               groups=1),
-            nn.Mish(),
+            nn.PReLU(),
+            MultiKernelConv2d(self.c, self.c, stride=2,
+                              padding=1, apply_spectral_norm=True,
+                              groups=16),
+            nn.PReLU(),
+            MultiKernelConv2d(self.c, self.c, stride=2,
+                              padding=1, apply_spectral_norm=True,
+                              groups=1),
+            nn.PReLU(),
             nn.AdaptiveAvgPool2d(1)
         )
 
-        self.fully_connected = nn.Sequential(nn.Linear(self.c * 8, 1))
+        self.fully_connected = nn.Sequential(nn.Linear(self.c, 1))
 
     def forward(self, input_tensor):
         features = self.feature_extractor(input_tensor)
@@ -42,7 +42,7 @@ class Critic(nn.Module):  # (N,3,64,64) -> (N,1)
 
 class Generator(nn.Module):  # (N,noise_dim,1,1) -> (N,3,64,64)
     def __init__(self, input_channels, noise_dim=100, initial_spatial_size=4,
-                 num_initial_feature_maps=256, num_feature_maps=256):
+                 num_initial_feature_maps=256, num_feature_maps=512):
         super(Generator, self).__init__()
         self.a = initial_spatial_size
         self.c_ = num_initial_feature_maps
@@ -71,8 +71,7 @@ class Generator(nn.Module):  # (N,noise_dim,1,1) -> (N,3,64,64)
             MultiKernelConv2d(self.c, self.c),
             nn.Mish(),
             nn.BatchNorm2d(self.c),
-            nn.Conv2d(self.c, input_channels, kernel_size=1),
-            nn.Tanh()
+            nn.Conv2d(self.c, input_channels, kernel_size=1)
         )
 
     def forward(self, input_tensor):
@@ -80,7 +79,7 @@ class Generator(nn.Module):  # (N,noise_dim,1,1) -> (N,3,64,64)
             input_tensor.view(input_tensor.shape[0], 100))
         features = self.feature_extractor(features.view(
             input_tensor.shape[0], self.c_, self.a, self.a))
-        output = (features + 1) / 2
+        output = (features - features.min())/(features.max() - features.min())
         return output
 
 
