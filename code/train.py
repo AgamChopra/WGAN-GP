@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
-from tqdm import trange, tqdm
+from tqdm import tqdm
 import models
 import dataset as dst
 
