@@ -220,7 +220,7 @@ def train():
 
 def gen_img(Gen=None):
     if Gen is None:
-        Gsave = "/home/agam/Documents/git_projects/Gen_temp.pt"
+        Gsave = "/home/agam/Documents/git_projects/Gen-Autosave.pt"
         Gen = models.Generator(3).cuda()
         try:
             Gen.load_state_dict(torch.load(Gsave))

@@ -149,7 +149,7 @@ def visualize(x, dark=True, title=None):
         plt.style.use('dark_background')
     else:
         plt.style.use('default')
-    plt.imshow(x.T)
+    plt.imshow(x.transpose(1, 2, 0))
     plt.axis('off')
     if title != None:
         plt.title(title)
@@ -163,10 +163,10 @@ def visualize_25(x, dark=True):
         plt.style.use('default')
     r = 5
     c = 5
-    fig = plt.figure(figsize=(20, 20))
+    fig = plt.figure(figsize=(20, 20), dpi=250)
     for i in range(x.shape[0]):
         fig.add_subplot(r, c, i+1)
-        plt.imshow(x[i].T)
+        plt.imshow(x[i].transpose(1, 2, 0))
         plt.axis('off')
     plt.show()
 
@@ -181,7 +181,7 @@ def visualize_16(x, dark=True):
     fig = plt.figure(figsize=(10, 10))
     for i in range(x.shape[0]):
         fig.add_subplot(r, c, i+1)
-        plt.imshow(x[i].T)
+        plt.imshow(x[i].transpose(1, 2, 0))
         plt.axis('off')
     plt.show()
 
