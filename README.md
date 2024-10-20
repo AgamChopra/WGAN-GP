@@ -2,7 +2,7 @@
 <p>My code for various GANS related tasks using wgan with gradient penalty. This adversarial model (generator and critic models) were trained on a single NIDIA RTX 3070 8gb GPU. The trained generator requires about 2gb of memory in production(evaluation + no_grad) mode. train.py contains the code for training the generator and critic using wgan-gp. A docker container will be provided in the future if I can get my hands on better hardware and retrain the models with more parameters.</p>
 
 <p align="center">
-    <img width="300" height="300" src="https://github.com/AgamChopra/WGAN-GP/blob/main/img/Ggan_celeb_video.webm">
+    <img width="300" height="300" src="https://github.com/AgamChopra/WGAN-GP/blob/main/img/gan_celeb_video.webm">
     <img width="300" height="300" src="https://github.com/AgamChopra/WGAN-GP/blob/main/img/cat_movie_quick.gif">
     <br><i>Fig. Output of generator during traing using celeb face dataset(Left), using smaller model on cat dataset(Right).</i><br>
     <img width="100" height="100" src="https://github.com/AgamChopra/WGAN-GP/blob/main/img/sample_celeb_predictions_5.png">
